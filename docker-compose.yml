@@ -1,0 +1,108 @@
+# Local Mail Categorizer. See README.md for first-time setup.
+#
+# Host layout (all under MAILCAT_ROOT, which must live on the LUKS-encrypted volume):
+#   $MAILCAT_ROOT/postgres      database files
+#   $MAILCAT_ROOT/data          blocklists, model cache, ClamAV signatures
+#   $MAILCAT_ROOT/attachments   inert attachment files (mounted noexec,nosuid,nodev)
+#   $MAILCAT_BACKUP_ROOT        encrypted backups, on a second disk
+
+name: mailcat
+
+x-app: &app
+  env_file: .env
+  restart: unless-stopped
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: ["ALL"]
+  depends_on:
+    db:
+      condition: service_healthy
+  environment: &app-env
+    MAILCAT_DATABASE_URL: postgresql+psycopg://mailcat:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/mailcat
+    MAILCAT_DATA_DIR: /data
+    MAILCAT_ATTACHMENT_DIR: /attachments
+    MAILCAT_BACKUP_DIR: /backup
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mailcat
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: mailcat
+    volumes:
+      - ${MAILCAT_ROOT:-/srv/mailcat}/postgres:/var/lib/postgresql/data
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mailcat -d mailcat"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 512m
+    shm_size: 128m
+    security_opt: ["no-new-privileges:true"]
+
+  api:
+    <<: *app
+    build: { context: ., target: api }
+    image: mailcat-api:latest
+    # Bind to the Tailscale address (or 127.0.0.1 behind `tailscale serve`), never to 0.0.0.0.
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:${API_PORT:-8080}:8080"
+    volumes:
+      - attachments:/attachments:ro
+      - data:/data:ro
+    read_only: true
+    tmpfs: ["/tmp:size=64m,noexec,nosuid,nodev"]
+    networks: [backend, egress]
+    mem_limit: 384m
+
+  worker:
+    <<: *app
+    build: { context: ., target: worker }
+    image: mailcat-worker:latest
+    # The scheduler idles at ~60 MB; the model, clamd and the run live in a child process that
+    # exits after each run.
+    command: ["mailcat", "scheduler"]
+    volumes:
+      - attachments:/attachments
+      - data:/data
+      - backup:/backup
+    read_only: true
+    tmpfs: ["/tmp:size=256m,noexec,nosuid,nodev"]
+    networks: [backend, egress]
+    mem_limit: ${WORKER_MEM_LIMIT:-3g}
+    cpus: ${WORKER_CPUS:-2}
+
+volumes:
+  attachments:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind,noexec,nosuid,nodev
+      device: ${MAILCAT_ROOT:-/srv/mailcat}/attachments
+  data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind,nosuid,nodev
+      device: ${MAILCAT_ROOT:-/srv/mailcat}/data
+  backup:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind,noexec,nosuid,nodev
+      device: ${MAILCAT_BACKUP_ROOT:-/mnt/backup/mailcat}
+
+networks:
+  # The database is reachable only from api and worker.
+  backend:
+    internal: true
+  # Fixed subnet so deploy/egress-firewall.sh can limit outbound traffic to IMAP, HTTPS and DNS.
+  egress:
+    ipam:
+      config:
+        - subnet: 172.31.250.0/24

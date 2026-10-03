@@ -1,0 +1,14 @@
+[Unit]
+Description=Limit outbound traffic of the mail categorizer containers
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/mailcat
+ExecStart=/opt/mailcat/deploy/egress-firewall.sh
+ExecStop=/opt/mailcat/deploy/egress-firewall.sh remove
+
+[Install]
+WantedBy=multi-user.target

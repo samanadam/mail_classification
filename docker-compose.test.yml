@@ -1,0 +1,19 @@
+# Services for the test suite: `docker compose -f docker-compose.test.yml up -d`
+# then `cd backend && pytest`.
+name: mailcat-test
+
+services:
+  testdb:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: mailcat
+      POSTGRES_PASSWORD: mailcat
+      POSTGRES_DB: mailcat
+    ports: ["127.0.0.1:55432:5432"]
+    tmpfs: ["/var/lib/postgresql/data"]
+
+  greenmail:
+    image: greenmail/standalone:2.1.2
+    environment:
+      GREENMAIL_OPTS: "-Dgreenmail.setup.test.all -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.auth.disabled"
+    ports: ["127.0.0.1:3143:3143"]

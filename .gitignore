@@ -1,0 +1,19 @@
+.env
+**/__pycache__/
+*.pyc
+backend/.venv/
+backend/*.egg-info/
+backend/.pytest_cache/
+backend/.ruff_cache/
+frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
+# real mail, credentials and backups must never be committed
+*.jsonl
+*.csv
+*.eml
+*.mbox
+*.gpg
+*.dump
+.env.*
+!.env.example
