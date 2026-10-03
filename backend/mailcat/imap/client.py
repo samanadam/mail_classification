@@ -37,6 +37,10 @@ class ImapError(RuntimeError):
     pass
 
 
+class WriteRefused(ImapError):
+    """A write was blocked by MAILCAT_READ_ONLY or by a sandbox session's scope."""
+
+
 @dataclass
 class FetchRecord:
     uid: int
@@ -128,7 +132,8 @@ def parse_fetch(data: list) -> list[FetchRecord]:
 
 class ImapSession:
     def __init__(self, host: str, port: int, provider: str, timeout: int = 60,
-                 folder_overrides: dict[str, str] | None = None, security: str = "ssl") -> None:
+                 folder_overrides: dict[str, str] | None = None, security: str = "ssl",
+                 read_only: bool = False, write_scope: str | None = None) -> None:
         self.host = host
         self.port = port
         self.security = security
@@ -138,6 +143,10 @@ class ImapSession:
         self.mailbox: MailBox | None = None
         self._folders: list[FolderInfo] | None = None
         self._selected: tuple[str, bool] | None = None
+        # read_only refuses every command that changes the mailbox. write_scope (a sandbox root
+        # folder) limits writes to that folder tree, plus moving its own mail to and from Trash.
+        self.read_only = read_only
+        self.write_scope = write_scope
 
     # -- connection -------------------------------------------------------------------------
 
@@ -233,10 +242,28 @@ class ImapSession:
         safe = category_name.replace(delim, "-").strip() or "Unnamed"
         return f"{parent}{delim}{safe}" if parent else safe
 
+    # -- write guards -----------------------------------------------------------------------
+
+    def in_scope(self, folder: str) -> bool:
+        if self.write_scope is None:
+            return True
+        return folder == self.write_scope or folder.startswith(self.write_scope + self.delimiter)
+
+    def _guard_write(self, *folders: str, trash_ok: bool = False) -> None:
+        if self.read_only:
+            raise WriteRefused("MAILCAT_READ_ONLY is on; the mailbox is never changed")
+        if self.write_scope is None:
+            return
+        trash = self.resolve_role("trash") if trash_ok else None
+        for folder in folders:
+            if not self.in_scope(folder) and not (trash and folder == trash):
+                raise WriteRefused(f"sandbox session may only write inside {self.write_scope}; refused {folder}")
+
     def ensure_folder(self, name: str) -> bool:
         """Create the folder (and its parent) if missing. Returns True when something was created."""
         if self.folder_exists(name):
             return False
+        self._guard_write(name)
         assert self.mailbox is not None
         delim = self.delimiter
         created = False
@@ -255,6 +282,7 @@ class ImapSession:
         return created
 
     def rename_folder(self, old: str, new: str) -> None:
+        self._guard_write(old, new)
         assert self.mailbox is not None
         try:
             self.mailbox.folder.rename(old, new)
@@ -264,6 +292,8 @@ class ImapSession:
 
     def select(self, folder: str, readonly: bool = True) -> tuple[int, int]:
         """Select (or EXAMINE when readonly). Returns (uidvalidity, message_count)."""
+        if not readonly:
+            self._guard_write(folder, trash_ok=True)
         typ, data = self.client.select(encode_folder(folder), readonly)
         if typ != "OK":
             raise ImapError(f"cannot select {folder}: {data}")
@@ -344,6 +374,9 @@ class ImapSession:
 
     def move(self, source: str, uid: int, destination: str) -> int | None:
         """Move one message. Returns its UID in the destination when the server reports it."""
+        self._guard_write(source, destination, trash_ok=True)
+        if self.write_scope is not None and not (self.in_scope(source) or self.in_scope(destination)):
+            raise WriteRefused(f"sandbox session refused a move outside {self.write_scope}")
         self._ensure_selected(source, readonly=False)
         caps = self.capabilities
         if "MOVE" in caps:
@@ -387,12 +420,27 @@ class ImapSession:
 
     def append(self, folder: str, raw: bytes, flags: str = "", date: datetime | None = None) -> None:
         """Used by the provider acceptance test to seed a throwaway mailbox."""
+        self._guard_write(folder)
         when = imaplib.Time2Internaldate(date.timestamp()) if date else None
         _check(self.client.append(encode_folder(folder), flags or None, when, raw), "APPEND")
         self._selected = None
 
     def set_flag(self, folder: str, uid: int, flag: str, value: bool) -> None:
         """Only used by tests to prepare mailboxes; the worker never changes flags."""
+        self._guard_write(folder)
         self._ensure_selected(folder, readonly=False)
         _check(self.client.uid("STORE", str(uid), ("+" if value else "-") + "FLAGS.SILENT", f"({flag})"),
                "STORE")
+
+    def delete_folder(self, name: str) -> None:
+        """Used only to remove the provider test's own sandbox folders."""
+        self._guard_write(name)
+        assert self.mailbox is not None
+        if self._selected and self._selected[0] == name:
+            # Some servers misbehave when the selected folder is deleted; look at INBOX instead.
+            self.select("INBOX", readonly=True)
+        try:
+            self.mailbox.folder.delete(name)
+        except Exception as exc:  # noqa: BLE001
+            raise ImapError(f"cannot delete folder {name}: {exc}") from exc
+        self.folders(refresh=True)

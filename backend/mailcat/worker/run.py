@@ -240,6 +240,9 @@ def execute_run(kind: str = "scheduled", triggered_by: str | None = None,
                 query = select(Account).where(Account.sync_enabled.is_(True)).order_by(Account.id)
                 if account_ids is not None:
                     query = query.where(Account.id.in_(account_ids))
+                else:
+                    # The provider test's sandbox account only runs when the test asks for it.
+                    query = query.where(Account.sandbox_root.is_(None))
                 accounts = list(session.scalars(query))
                 new_ids = step_fetch(session, ctx, accounts, categories, run)
                 step_security(session, ctx, new_ids, blocklist)

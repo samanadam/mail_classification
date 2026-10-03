@@ -8,16 +8,28 @@ The test shows the folders it found for Sent, Spam, Trash and (on Gmail) All Mai
 set a folder override via the API, for example
 `PATCH /api/accounts/<id> {"folder_overrides": {"trash": "Deleted Items"}}`.
 
-Before you turn on write-back for a provider, run the acceptance checklist on a **throwaway** account from the
-same provider:
+Before you turn on write-back or deletion for an account, run the acceptance checklist on it. No throwaway
+account is needed: the test works inside your real mailbox without touching existing mail.
 
 ```bash
-docker compose exec worker mailcat account add --name gmail-test --provider gmail --email throwaway@gmail.com
-docker compose exec worker mailcat provider-test gmail-test --yes-this-is-a-throwaway-account
+# pause runs in Settings first
+docker compose run --rm -e MAILCAT_READ_ONLY=false worker mailcat provider-test gmail --yes
 ```
 
-The test appends test messages, runs the real pipeline several times, and checks each item of the plan's
-Testing list against the server. Every line must say PASS.
+How it stays away from your mail:
+
+- It runs on a temporary sandbox copy of the account. Your account's settings are never changed.
+- The sandbox's IMAP connection can only write inside a new `MailcatTest` folder (and move its own test mail
+  to Trash). Any other write is refused by the IMAP client itself, before it reaches the server.
+- It appends synthetic test mail to `MailcatTest/Inbox`, runs the real pipeline several times, and checks each
+  item of the plan's Testing list against the server.
+- Check 15 fingerprints every other folder (UIDs and flags) before and after. If a single existing mail
+  moved, vanished or changed read/star state, the test fails.
+- Afterwards the test mail is moved to Trash and the `MailcatTest` folders are deleted (only if they hold
+  nothing but test mail).
+
+Every line must say PASS, and it ends with `ALL PASSED`. Don't read or move mail in that account while the
+test runs (a few minutes): check 15 would report your own changes. Run it once per account.
 
 Provider rules change, so re-check these steps when you set an account up.
 

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from mailcat import settings_store
 from mailcat.api.deps import current_user, get_db
+from mailcat.config import get_config
 from mailcat.models import Account, ActionLog, Category, Correction, Mail, Run, RunRequest, SettingsLog, User
 from mailcat.security import blocklists
 from mailcat.worker.policy import live_delete_count, plan_deletions
@@ -32,13 +33,14 @@ def status(db: Session = Depends(get_db), _: User = Depends(current_user)) -> di
     settings = settings_store.get_all(db)
     accounts = [{"id": a.id, "name": a.name, "last_sync_at": a.last_sync_at, "last_sync_ok": a.last_sync_ok,
                  "last_sync_error": a.last_sync_error, "sync_enabled": a.sync_enabled}
-                for a in db.scalars(select(Account).order_by(Account.id))]
+                for a in db.scalars(select(Account).where(Account.sandbox_root.is_(None)).order_by(Account.id))]
     return {
         "last_run": _run_out(last) if last else None,
         "running": _run_out(running) if running else None,
         "sync_requested": pending is not None,
         "next_run_at": next_run_at(settings, datetime.now(UTC)),
         "runs_paused": settings["runs_paused"],
+        "read_only": get_config().read_only,
         "accounts": accounts,
         "blocklists": blocklists.status(),
         "review_count": db.scalar(select(func.count()).select_from(Mail).join(

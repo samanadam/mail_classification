@@ -45,7 +45,8 @@ def providers(_: User = Depends(current_user)) -> list[dict]:
 @router.get("")
 def list_accounts(db: Session = Depends(get_db), _: User = Depends(current_user)) -> list[dict]:
     counts = dict(db.execute(select(Mail.account_id, func.count()).group_by(Mail.account_id)).all())
-    return [_out(a, counts.get(a.id, 0)) for a in db.scalars(select(Account).order_by(Account.id))]
+    query = select(Account).where(Account.sandbox_root.is_(None)).order_by(Account.id)
+    return [_out(a, counts.get(a.id, 0)) for a in db.scalars(query)]
 
 
 class AccountIn(BaseModel):

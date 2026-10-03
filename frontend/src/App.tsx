@@ -139,6 +139,12 @@ function Shell({ username }: { username: string }) {
             {s?.runs_paused ? "Scheduled runs paused" : s?.next_run_at ? `Next ${fmtDate(s.next_run_at)}` : ""}
           </div>
         </div>
+        {s?.read_only && (
+          <div className="banner warn" style={{ margin: "10px 18px 0" }}>
+            Read-only mode (MAILCAT_READ_ONLY): mailboxes are never changed. Moves and deletions only show what
+            they would do.
+          </div>
+        )}
         {failing.length > 0 && (
           <div className="banner danger" style={{ margin: "10px 18px 0" }}>
             Sync failing for {failing.map((a) => a.name).join(", ")}: {failing[0].last_sync_error}

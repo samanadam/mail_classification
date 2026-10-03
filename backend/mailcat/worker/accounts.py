@@ -13,7 +13,8 @@ from mailcat.models import Account
 def open_session(session: Session, account: Account) -> ImapSession:
     creds = decrypt_credentials(account.credentials_enc)
     imap = ImapSession(account.host, account.port, account.provider, timeout=get_config().imap_timeout,
-                       folder_overrides=account.folder_overrides or {}, security=account.security)
+                       folder_overrides=account.folder_overrides or {}, security=account.security,
+                       read_only=get_config().read_only, write_scope=account.sandbox_root)
     if account.auth_method == "oauth2":
         token, updated = oauth.access_token(creds)
         if updated != creds:
@@ -26,3 +27,10 @@ def open_session(session: Session, account: Account) -> ImapSession:
             raise ValueError(f"account {account.name} has no password stored")
         imap.login_password(account.username, password)
     return imap
+
+
+def inbox_folder(imap: ImapSession, account: Account) -> str:
+    """The folder treated as the inbox: INBOX, or the provider test's sandbox inbox."""
+    if account.sandbox_root:
+        return imap.category_folder(account.sandbox_root, "Inbox")
+    return "INBOX"

@@ -89,6 +89,9 @@ class Account(Base):
     timer_overrides: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     # Optional explicit folder names {"inbox":..,"sent":..,"spam":..,"trash":..,"all":..}
     folder_overrides: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    # Set only on the provider test's temporary account: it syncs <root>/Inbox instead of INBOX
+    # and every write is confined to the <root> folder tree (plus Trash).
+    sandbox_root: Mapped[str | None] = mapped_column(String(100))
 
     last_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_sync_ok: Mapped[bool | None] = mapped_column(Boolean)

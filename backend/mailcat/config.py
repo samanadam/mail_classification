@@ -55,6 +55,8 @@ class Config(BaseSettings):
 
     log_level: str = "INFO"
     imap_timeout: int = 60
+    # Hard switch: refuse every IMAP command that changes a mailbox, whatever the dashboard says.
+    read_only: bool = False
 
     @property
     def attachments_path(self) -> Path:

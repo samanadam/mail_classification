@@ -23,6 +23,7 @@ from mailcat.ingest import attachments as attachment_store
 from mailcat.ingest.clamav import Scanner
 from mailcat.ingest.parser import parse_message
 from mailcat.models import Account, Attachment, Category, FolderState, Link, Mail, Tombstone
+from mailcat.worker.accounts import inbox_folder
 from mailcat.worker.context import RunContext
 
 log = logging.getLogger(__name__)
@@ -47,8 +48,11 @@ def _clean(text: str | None) -> str:
 
 def _synced_folders(session: Session, imap: ImapSession, account: Account,
                     categories: list[Category]) -> list[tuple[str, str, int | None]]:
-    folders: list[tuple[str, str, int | None]] = [("INBOX", "inbox", None)]
-    for role in ("sent", "spam"):
+    folders: list[tuple[str, str, int | None]] = [(inbox_folder(imap, account), "inbox", None)]
+    sandbox = account.sandbox_root is not None
+    if sandbox and account.sorted_parent != account.sandbox_root:
+        raise ValueError(f"sandbox account {account.name}: sorted_parent must equal the sandbox root")
+    for role in () if sandbox else ("sent", "spam"):
         name = imap.resolve_role(role)
         if name:
             folders.append((name, role, None))
@@ -61,6 +65,8 @@ def _synced_folders(session: Session, imap: ImapSession, account: Account,
     # Folders of merged or deleted categories still hold mail we filed; keep tracking them.
     for state in session.scalars(select(FolderState).where(
             FolderState.account_id == account.id, FolderState.role == "sorted")):
+        if sandbox and not imap.in_scope(state.folder):
+            continue
         if state.folder not in seen and imap.folder_exists(state.folder):
             folders.append((state.folder, "sorted", state.category_id))
             seen.add(state.folder)

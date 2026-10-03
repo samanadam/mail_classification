@@ -193,6 +193,7 @@ export interface Status {
   sync_requested: boolean;
   next_run_at: string | null;
   runs_paused: boolean;
+  read_only: boolean;
   accounts: { id: number; name: string; last_sync_at: string | null; last_sync_ok: boolean | null;
     last_sync_error: string | null; sync_enabled: boolean }[];
   blocklists: Record<string, { updated_at: string; entries: number }>;

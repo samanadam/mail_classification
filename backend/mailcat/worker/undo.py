@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from mailcat.imap.client import ImapError
 from mailcat.models import Account, ActionLog, Mail, Run, Tombstone
-from mailcat.worker.accounts import open_session
+from mailcat.worker.accounts import inbox_folder, open_session
 from mailcat.worker.run import run_lock
 from mailcat.worker.writeback import MoveResult, move_and_verify
 
@@ -67,7 +67,8 @@ def undo_run(session: Session, run_id: int, include_deletes: bool = True, dry_ru
                     counts["undone"] += 1
                     mail = session.scalar(select(Mail).where(Mail.account_id == account.id,
                                                              Mail.message_id == entry.message_id))
-                    role = "inbox" if entry.from_folder.upper() == "INBOX" else "sorted"
+                    inbox = inbox_folder(imap, account)
+                    role = "inbox" if entry.from_folder.upper() == inbox.upper() else "sorted"
                     if mail is not None:
                         mail.folder, mail.folder_role = entry.from_folder, role
                         mail.uid, mail.uidvalidity = result.new_uid, result.uidvalidity

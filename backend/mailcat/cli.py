@@ -407,19 +407,25 @@ def cmd_blocklists(_: argparse.Namespace) -> int:
 
 
 def cmd_provider_test(args: argparse.Namespace) -> int:
+    from mailcat.config import get_config
     from mailcat.db import new_session
-    from mailcat.ops.acceptance import run_scenario
+    from mailcat.ops.acceptance import TEST_PARENT, run_scenario
 
-    if not args.yes_this_is_a_throwaway_account:
-        raise SystemExit("this test appends, moves and deletes mail; run it only on a throwaway account "
-                         "and pass --yes-this-is-a-throwaway-account")
+    if get_config().read_only:
+        raise SystemExit("MAILCAT_READ_ONLY is on. Run this one command with it off:\n"
+                         "  docker compose run --rm -e MAILCAT_READ_ONLY=false worker mailcat provider-test ...")
+    if not args.yes:
+        raise SystemExit(f"This test creates a {TEST_PARENT} folder in the real mailbox, puts test mail in it,\n"
+                         "moves and deletes only that test mail, and checks that every other mail is unchanged.\n"
+                         "Test mail ends up in Trash. Pause runs in Settings first, then pass --yes.")
     session = new_session()
     try:
-        report = run_scenario(session, _account(session, args.name), require_empty_inbox=not args.force)
+        report = run_scenario(session, _account(session, args.name))
     finally:
         session.close()
     for check in report.checks:
         print(f"[{'PASS' if check.ok else 'FAIL'}] {check.name}{'  ' + check.detail if not check.ok else ''}")
+    print("ALL PASSED: this provider is safe to enable." if report.ok else "FAILED: keep this account read-only.")
     return 0 if report.ok else 1
 
 
@@ -517,10 +523,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_restore)
     sub.add_parser("blocklists", help="refresh blocklist feeds now").set_defaults(func=cmd_blocklists)
 
-    p = sub.add_parser("provider-test", help="run the acceptance checklist on a throwaway account")
+    p = sub.add_parser("provider-test", help="run the acceptance checklist in a sandbox folder of a real account")
     p.add_argument("name")
-    p.add_argument("--yes-this-is-a-throwaway-account", action="store_true")
-    p.add_argument("--force", action="store_true", help="allow a non-empty INBOX")
+    p.add_argument("--yes", action="store_true")
     p.set_defaults(func=cmd_provider_test)
     return parser
 

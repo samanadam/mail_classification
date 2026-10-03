@@ -59,9 +59,10 @@ OAuth) are in [docs/accounts.md](docs/accounts.md).
 
 | Step | What to do | Done when |
 | --- | --- | --- |
+| Start | Deploy with `MAILCAT_READ_ONLY=true` (the default in `.env.example`). No mailbox can be changed, whatever the dashboard says | Dashboard shows the read-only banner |
 | 0. Prove Laya | Sync one account read-only, then `mailcat eval export`, label ~200 mails, `mailcat eval run` ([docs/phase0-evaluation.md](docs/phase0-evaluation.md)) | Accuracy is good enough, or set `MAILCAT_CLASSIFIER=ollama` |
 | 1–4. Ingest, classify, dashboard, checks | Accounts start read-only. Browse, correct mail in the Review queue, add rules | Every mail has a category |
-| 5. Write-back | First run `mailcat provider-test` on a throwaway account. Then turn on write-back **dry-run**, read the planned moves in Activity, and switch to live | Moves look right |
+| 5. Write-back | Run `provider-test` on the account ([docs/accounts.md](docs/accounts.md)); it works in a sandbox folder and proves your existing mail is untouched. Set `MAILCAT_READ_ONLY=false` and restart. Turn on write-back **dry-run**, read the planned moves in Activity, then switch to live | Moves look right |
 | 6. Retention | Set timers, turn on deletion **dry-run**, check Activity and the Deletion preview, then switch to live | Deletion log looks right |
 | 7. More accounts | Add iCloud, Yandex, custom domain, then Outlook, and run `provider-test` on each | Each passes |
 | 8. Backfill | Turn on "Import full history" per account. It is throttled and resumable, newest first | History is sorted |
@@ -72,6 +73,9 @@ for at least one finished run.
 
 ## Safety guarantees
 
+- **Read-only switch:** with `MAILCAT_READ_ONLY=true` the IMAP client refuses every command that changes a
+  mailbox (move, copy, flag, append, expunge, folder create/rename/delete), and runs only log what they would
+  do. Dashboard settings cannot override it.
 - **Read state is never changed.** Every read uses `EXAMINE` + `BODY.PEEK`. Moves use `UID MOVE`, which keeps
   flags and dates, and every move checks after the fact that `\Seen` and `\Flagged` are unchanged.
 - **The tool never deletes mail permanently.** Deleting moves mail to the provider's Trash. Without `MOVE`,
@@ -105,7 +109,7 @@ when the stack is down.
 | `user add <name>` | create a dashboard user or reset a password |
 | `eval export/run/corrections/training-data` | model evaluation ([docs/phase0-evaluation.md](docs/phase0-evaluation.md)) |
 | `model download/check` | fetch the model once, check speed and memory |
-| `provider-test <account> --yes-this-is-a-throwaway-account` | the plan's whole testing checklist against a real mailbox |
+| `provider-test <account> --yes` | the plan's whole testing checklist in a sandbox folder of a real mailbox |
 | `backup`, `backup-verify [dir]`, `restore <dir> --yes` | encrypted backups ([docs/operations.md](docs/operations.md)) |
 | `blocklists` | refresh the blocklist feeds now |
 

@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from mailcat.config import get_config
 from mailcat.models import Account, Category, Mail, SenderTimer, Tombstone
 
 TIMER_KEYS = ("move_days", "mailbox_delete_days", "local_delete_days")
@@ -24,7 +25,9 @@ def effective_timer(account: Account, category: Category, key: str) -> int | Non
 
 
 def mode(enabled: bool, dry_run: bool) -> str:
-    return "off" if not enabled else ("dry_run" if dry_run else "live")
+    if not enabled:
+        return "off"
+    return "dry_run" if dry_run or get_config().read_only else "live"
 
 
 def protection_reason(item: Mail | Tombstone, category: Category | None, settings: dict[str, Any]) -> str | None:
