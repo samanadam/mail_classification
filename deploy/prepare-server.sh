@@ -137,7 +137,7 @@ if command -v tailscale >/dev/null; then
   echo "already installed"
 else
   read -r -p "Install Tailscale now? [y/N] " answer
-  if [[ "$answer" == "y" ]]; then
+  if [[ "${answer,,}" == "y" ]]; then
     curl -fsSL https://tailscale.com/install.sh | sh
     tailscale up
   else

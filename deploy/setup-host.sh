@@ -17,7 +17,7 @@ source_dev="$(findmnt -n -o SOURCE --target "$MAILCAT_ROOT" || true)"
 if ! lsblk -sno TYPE "$source_dev" 2>/dev/null | grep -q crypt; then
   echo "WARNING: $MAILCAT_ROOT is not on a dm-crypt (LUKS) device. See docs/operations.md." >&2
   read -r -p "Continue anyway? [y/N] " answer
-  [[ "$answer" == "y" ]] || exit 1
+  [[ "${answer,,}" == "y" ]] || exit 1
 fi
 
 # uid 10001 is the "mailcat" user inside the containers; it does not exist on the host, so use chown
