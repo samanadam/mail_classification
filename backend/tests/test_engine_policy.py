@@ -38,6 +38,20 @@ def _settings(db):
     return settings_store.get_all(db)
 
 
+def test_unsure_mail_in_provider_spam_folder_is_spam(db):
+    acc = f.account(db)
+    junk = f.mail(db, acc, subject="win a prize", folder_role="spam", folder="Junk")
+    silent = f.mail(db, acc, subject="no answer", folder_role="spam", folder="Junk")
+    real = f.mail(db, acc, subject="Your invoice", folder_role="spam", folder="Junk")
+    clf = FixedClassifier({"win a prize": ("Promotions", 0.4), "Your invoice": ("Finance", 0.95)})
+    classify_mails(db, [junk, silent, real], clf, _settings(db))
+    cats = CategorySet.load(db)
+    assert junk.category_id == cats.spam.id and junk.decided_by == "provider" and junk.confidence == 0.4
+    assert silent.category_id == cats.spam.id and silent.decided_by == "provider"
+    # confidently real mail in the spam folder keeps its category (shown as "provider spam, maybe real")
+    assert cats.by_id[real.category_id].name == "Finance"
+
+
 def test_rules_model_threshold_and_fallback(db):
     acc = f.account(db)
     gh = f.mail(db, acc, from_address="notifications@github.com", subject="PR merged")

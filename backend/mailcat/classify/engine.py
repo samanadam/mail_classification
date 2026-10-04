@@ -172,7 +172,13 @@ def classify_mails(
             continue
         name, prob = out.top if out else (None, 0.0)
         via = f" (rule {match.rule_name} limited the choices)" if match and match.action == "restrict" else ""
-        if name is None or name not in categories.by_name:
+        unsure = name is None or name not in categories.by_name or prob < threshold
+        if unsure and mail.folder_role == "spam":
+            # The provider already judged it spam and the model has no confident reason to disagree.
+            _apply(mail, categories.spam, prob or None, "provider", "in the provider's spam folder; "
+                   + (f"best guess {name} at {prob:.2f} is below {threshold:.2f}" if name else "no model answer"))
+            counts["provider_spam"] += 1
+        elif name is None or name not in categories.by_name:
             _apply(mail, categories.undecided, None, "fallback", "no model answer" + via)
             counts["fallback"] += 1
         elif prob < threshold:
