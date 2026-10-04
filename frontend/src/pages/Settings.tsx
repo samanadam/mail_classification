@@ -54,7 +54,8 @@ export default function SettingsPage() {
           <h2>{group}</h2>
           <div className="grid-form">
             {keys.map((key) => (
-              <Field key={key} spec={specs[key]} value={draft[key]} onChange={(v) => setDraft({ ...draft, [key]: v })} />
+              <Field key={key} spec={specs[key]} value={key in draft ? draft[key] : values[key]}
+                     onChange={(v) => setDraft({ ...values, ...draft, [key]: v })} />
             ))}
           </div>
         </div>
@@ -115,9 +116,9 @@ function Field({ spec, value, onChange }: { spec: SettingSpec; value: unknown; o
     case "dict":
       input = (
         <div className="row">
-          {Object.entries(value as Record<string, boolean>).map(([k, v]) => (
+          {Object.entries((value ?? {}) as Record<string, boolean>).map(([k, v]) => (
             <label key={k} className="switch">
-              <input type="checkbox" checked={v} onChange={(e) => onChange({ ...(value as object), [k]: e.target.checked })} /> {k}
+              <input type="checkbox" checked={v} onChange={(e) => onChange({ ...((value ?? {}) as object), [k]: e.target.checked })} /> {k}
             </label>
           ))}
         </div>

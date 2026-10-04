@@ -29,10 +29,15 @@ def _password(prompt: str, env: str | None) -> str:
         return value
     if not sys.stdin.isatty():
         raise SystemExit("no terminal for a password prompt; pass --password-env VAR")
-    first = getpass.getpass(prompt)
-    if getpass.getpass("again: ") != first:
-        raise SystemExit("passwords do not match")
-    return first
+    while True:
+        first = getpass.getpass(prompt)
+        if len(first) < 10:
+            print("too short: use at least 10 characters")
+            continue
+        if getpass.getpass("again: ") != first:
+            print("the two entries differ; try again")
+            continue
+        return first
 
 
 def _account(session, name: str):
