@@ -16,11 +16,11 @@ H = {"X-Requested-With": "mailcat"}
 def client(db):
     from mailcat.api.main import create_app
 
-    db.add(User(username="eren", password_hash=hash_password("correct horse battery")))
+    db.add(User(username="admin", password_hash=hash_password("correct horse battery")))
     db.commit()
-    throttle.reset("ip:testclient", "user:eren")
+    throttle.reset("ip:testclient", "user:admin")
     c = TestClient(create_app())
-    r = c.post("/api/auth/login", json={"username": "eren", "password": "correct horse battery"}, headers=H)
+    r = c.post("/api/auth/login", json={"username": "admin", "password": "correct horse battery"}, headers=H)
     assert r.status_code == 200
     return c
 
@@ -28,22 +28,22 @@ def client(db):
 def test_auth_required_csrf_and_throttle(db):
     from mailcat.api.main import create_app
 
-    db.add(User(username="eren", password_hash=hash_password("correct horse battery")))
+    db.add(User(username="admin", password_hash=hash_password("correct horse battery")))
     db.commit()
-    throttle.reset("ip:testclient", "user:eren")
+    throttle.reset("ip:testclient", "user:admin")
     c = TestClient(create_app())
     assert c.get("/api/mails").status_code == 401
-    assert c.post("/api/auth/login", json={"username": "eren", "password": "x"}).status_code == 403  # no header
+    assert c.post("/api/auth/login", json={"username": "admin", "password": "x"}).status_code == 403  # no header
     for _ in range(5):
-        assert c.post("/api/auth/login", json={"username": "eren", "password": "wrong"}, headers=H).status_code == 401
-    r = c.post("/api/auth/login", json={"username": "eren", "password": "correct horse battery"}, headers=H)
+        assert c.post("/api/auth/login", json={"username": "admin", "password": "wrong"}, headers=H).status_code == 401
+    r = c.post("/api/auth/login", json={"username": "admin", "password": "correct horse battery"}, headers=H)
     assert r.status_code == 429
-    throttle.reset("ip:testclient", "user:eren")
-    r = c.post("/api/auth/login", json={"username": "eren", "password": "correct horse battery"}, headers=H)
+    throttle.reset("ip:testclient", "user:admin")
+    r = c.post("/api/auth/login", json={"username": "admin", "password": "correct horse battery"}, headers=H)
     assert r.status_code == 200 and "httponly" in r.headers["set-cookie"].lower()
     assert "samesite=strict" in r.headers["set-cookie"].lower()
     assert r.headers["content-security-policy"].startswith("default-src 'self'")
-    assert c.get("/api/auth/me").json() == {"username": "eren"}
+    assert c.get("/api/auth/me").json() == {"username": "admin"}
     assert c.post("/api/auth/logout", headers=H).status_code == 200
     assert c.get("/api/auth/me").status_code == 401
 
@@ -119,7 +119,7 @@ def test_password_change_signs_out_other_sessions(client, db):
     from mailcat.api.main import create_app
 
     other = TestClient(create_app())
-    assert other.post("/api/auth/login", json={"username": "eren", "password": "correct horse battery"},
+    assert other.post("/api/auth/login", json={"username": "admin", "password": "correct horse battery"},
                       headers=H).status_code == 200
     r = client.post("/api/auth/password", headers=H,
                     json={"current_password": "correct horse battery", "new_password": "a brand new passphrase"})
@@ -146,7 +146,7 @@ def test_settings_validation_and_log(client, db):
     assert client.get("/api/settings").json()["values"]["run_time"] == "05:30"  # nothing half-applied
     logs = db.scalars(select(SettingsLog).where(SettingsLog.key == "confidence_threshold")).all()
     assert len(logs) == 1 and logs[0].old_value == 0.6 and logs[0].new_value == 0.7
-    assert logs[0].changed_by == "eren"
+    assert logs[0].changed_by == "admin"
 
 
 def test_shorter_delete_timer_needs_confirmation(client, db):

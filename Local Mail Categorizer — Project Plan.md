@@ -1,6 +1,6 @@
 # Local Mail Categorizer — Project Plan
 
-Oct 3, 2026 · @Eren
+Oct 3, 2026
 
 ## Summary
 

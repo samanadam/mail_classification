@@ -49,11 +49,11 @@ def test_sender_timer_overrides_category_both_ways(db):
 def client(db):
     from mailcat.api.main import create_app
 
-    db.add(User(username="eren", password_hash=hash_password("correct horse battery")))
+    db.add(User(username="admin", password_hash=hash_password("correct horse battery")))
     db.commit()
-    throttle.reset("ip:testclient", "user:eren")
+    throttle.reset("ip:testclient", "user:admin")
     c = TestClient(create_app())
-    c.post("/api/auth/login", json={"username": "eren", "password": "correct horse battery"}, headers=H)
+    c.post("/api/auth/login", json={"username": "admin", "password": "correct horse battery"}, headers=H)
     return c
 
 

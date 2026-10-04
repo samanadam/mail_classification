@@ -7,6 +7,30 @@ deletes old mail on per-category timers. No mail content ever leaves the server.
 The design is in [Local Mail Categorizer — Project Plan.md](Local%20Mail%20Categorizer%20—%20Project%20Plan.md). This
 README covers running it.
 
+## Highlights
+
+- **Private by design.** Classification runs on a local model on the server's CPU. No mail content is sent to
+  any external service, and the dashboard is reachable only over a Tailscale network.
+- **Safe on real mailboxes.** Read state is never changed, nothing is permanently deleted, every move is verified
+  by Message-ID, and a hard read-only switch blocks all mailbox writes at the IMAP layer.
+- **Provable per provider.** `provider-test` runs the full acceptance checklist inside a sandbox folder of a
+  real account and fingerprints every other folder to prove existing mail is untouched.
+- **Five providers, one connector.** Gmail, iCloud, Yandex, any IMAP host, and Outlook via OAuth2, with
+  SPECIAL-USE folder detection and per-provider fallbacks.
+- **Security checks without network calls.** ClamAV scans, offline phishing blocklists, lookalike-domain and
+  link-mismatch detection, SPF/DKIM/DMARC parsing, sanitized HTML in a sandboxed iframe.
+- **Built for a small server.** One scheduled run per day in a child process, so model memory is returned
+  to the OS. It fits next to other projects on an 8 GB laptop.
+
+| Layer | Stack |
+| --- | --- |
+| Backend | Python 3.12, FastAPI, SQLAlchemy 2, Alembic, PostgreSQL 16 (full-text search) |
+| Mail | imap-tools / imaplib (UID MOVE, UIDPLUS, X-GM-RAW), MSAL for Outlook OAuth2 |
+| Classification | Laya multilingual (PyTorch or ONNX on CPU), rules engine, thread inheritance, optional Ollama |
+| Frontend | React 18, TypeScript, Vite, TanStack Query |
+| Ops | Docker Compose (read-only rootfs, dropped capabilities, internal network), GPG-encrypted backups, Discord alerts |
+| Tests | pytest against real PostgreSQL and a GreenMail IMAP server, including the end-to-end acceptance checklist |
+
 ## What runs
 
 | Container | Image target | Runs | Job |
@@ -44,7 +68,7 @@ cp .env.example .env && chmod 600 .env
 docker compose build
 docker compose run --rm --no-deps api mailcat gen-key      # paste into MAILCAT_SECRET_KEY in .env
 sudo ./deploy/setup-host.sh                                 # data/attachment/backup directories
-docker compose run --rm worker mailcat init --admin eren   # schema, 13 categories, default rules, login
+docker compose run --rm worker mailcat init --admin <name>   # schema, 13 categories, default rules, login
 docker compose run --rm worker mailcat model download      # one-time model download; runs stay offline
 docker compose run --rm worker mailcat model check         # speed and memory on this CPU
 docker compose up -d
