@@ -12,7 +12,9 @@ fi
 set -a; source .env; set +a
 : "${MAILCAT_ROOT:?}" "${MAILCAT_BACKUP_ROOT:?}"
 
-if ! findmnt -n -o SOURCE --target "$MAILCAT_ROOT" | grep -q '^/dev/mapper/'; then
+# LVM volumes are also /dev/mapper devices, so look for a crypt layer under the mount instead.
+source_dev="$(findmnt -n -o SOURCE --target "$MAILCAT_ROOT" || true)"
+if ! lsblk -sno TYPE "$source_dev" 2>/dev/null | grep -q crypt; then
   echo "WARNING: $MAILCAT_ROOT is not on a dm-crypt (LUKS) device. See docs/operations.md." >&2
   read -r -p "Continue anyway? [y/N] " answer
   [[ "$answer" == "y" ]] || exit 1
