@@ -22,6 +22,22 @@ README covers running it.
 - **Built for a small server.** One scheduled run per day in a child process, so model memory is returned
   to the OS. It fits next to other projects on an 8 GB laptop.
 
+## Screenshots
+
+All screenshots use invented demo data (`backend/scripts/demo_data.py`); every address is on the reserved
+`.example` domain.
+
+![Inbox with categories](docs/screenshots/inbox.jpg)
+
+| | |
+| --- | --- |
+| ![A phishing mail flagged by the offline checks](docs/screenshots/phishing-detail.jpg) | ![Review queue for low-confidence mail](docs/screenshots/review-queue.jpg) |
+| Phishing detection: lookalike domain, SPF failure, link text that hides its destination | Review queue: one click corrects a category and records it for evaluation |
+| ![Per-category timers](docs/screenshots/categories-timers.jpg) | ![Accounts with dry-run switches](docs/screenshots/accounts.jpg) |
+| Per-category move and delete timers | Per-account write-back and deletion, each with a dry-run mode |
+
+## Stack
+
 | Layer | Stack |
 | --- | --- |
 | Backend | Python 3.12, FastAPI, SQLAlchemy 2, Alembic, PostgreSQL 16 (full-text search) |
@@ -146,6 +162,21 @@ cd backend && python -m venv .venv && .venv/bin/pip install -e ".[dev]"
 .venv/bin/ruff check mailcat tests
 cd ../frontend && npm ci && npm run build                   # npm run dev proxies /api to :8080
 ```
+
+To try the dashboard without any real mail, load the invented demo data into a separate database (its name
+must end in `_demo`) and log in as `demo` / `demo-password-123`:
+
+```bash
+docker exec mailcat-testdb psql -U mailcat -d postgres -c "CREATE DATABASE mailcat_demo"
+export MAILCAT_DATABASE_URL=postgresql+psycopg://mailcat:mailcat@localhost:55432/mailcat_demo
+export MAILCAT_SECRET_KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+export MAILCAT_STATIC_DIR=../frontend/dist MAILCAT_READ_ONLY=true
+python scripts/demo_data.py && python -m mailcat.cli api --host 127.0.0.1 --port 8099
+```
+
+## License
+
+[MIT](LICENSE)
 
 Layout: `backend/mailcat/` holds `imap/` (client, providers, OAuth), `ingest/` (parser, attachments, ClamAV),
 `security/` (blocklists, links, headers), `classify/` (rules, engine, model backends), `worker/` (sync,
