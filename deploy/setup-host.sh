@@ -20,9 +20,10 @@ if ! lsblk -sno TYPE "$source_dev" 2>/dev/null | grep -q crypt; then
   [[ "$answer" == "y" ]] || exit 1
 fi
 
-install -d -m 0700 -o 10001 -g 10001 "$MAILCAT_ROOT/data" "$MAILCAT_ROOT/attachments"
-install -d -m 0700 "$MAILCAT_ROOT/postgres"
-install -d -m 0700 -o 10001 -g 10001 "$MAILCAT_BACKUP_ROOT"
+# uid 10001 is the "mailcat" user inside the containers; it does not exist on the host, so use chown
+# (which takes a numeric id) instead of install -o.
+install -d -m 0700 "$MAILCAT_ROOT/data" "$MAILCAT_ROOT/attachments" "$MAILCAT_ROOT/postgres" "$MAILCAT_BACKUP_ROOT"
+chown 10001:10001 "$MAILCAT_ROOT/data" "$MAILCAT_ROOT/attachments" "$MAILCAT_BACKUP_ROOT"
 chmod 600 .env
 
 echo "Directories ready:"
