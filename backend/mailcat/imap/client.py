@@ -164,6 +164,7 @@ class ImapSession:
             self.mailbox.login(username, password, initial_folder=None)
         except Exception as exc:
             raise ImapError(f"login failed for {username}@{self.host}: {exc}") from exc
+        self._refresh_capabilities()
 
     def login_xoauth2(self, username: str, token: str) -> None:
         self.mailbox = self._mailbox()
@@ -171,6 +172,14 @@ class ImapSession:
             self.mailbox.xoauth2(username, token, initial_folder=None)
         except Exception as exc:
             raise ImapError(f"OAuth2 login failed for {username}@{self.host}: {exc}") from exc
+        self._refresh_capabilities()
+
+    def _refresh_capabilities(self) -> None:
+        """imaplib keeps the pre-login CAPABILITY list. Gmail and iCloud only announce MOVE and
+        UIDPLUS after login, so ask again once authenticated."""
+        typ, data = self.client.capability()
+        if typ == "OK" and data and data[-1]:
+            self.client.capabilities = tuple(data[-1].decode("ascii", "replace").upper().split())
 
     def close(self) -> None:
         if self.mailbox is None:
