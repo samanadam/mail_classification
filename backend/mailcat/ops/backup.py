@@ -193,6 +193,10 @@ def verify_backup(path: Path) -> dict:
         listing = subprocess.run(["pg_restore", "--list"], stdin=gpg.stdout,  # noqa: S603
                                  capture_output=True, check=False)
         assert gpg.stdout is not None
+        # pg_restore --list stops after the table of contents; drain the rest so gpg
+        # can finish (and check the integrity of the whole file) instead of hitting EPIPE.
+        while gpg.stdout.read(1 << 20):
+            pass
         gpg.stdout.close()
         _wait(gpg, "gpg decrypt (database)")
     finally:
